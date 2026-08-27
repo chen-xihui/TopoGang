@@ -14,6 +14,7 @@ build:
 	go build -o $(BIN_DIR)/topo-agent.exe ./cmd/agent
 	go build -o $(BIN_DIR)/topogang-controller.exe ./cmd/controller
 	go build -o $(BIN_DIR)/topogang-scheduler.exe ./cmd/scheduler
+	go build -o $(BIN_DIR)/topo-gpu-plugin.exe ./cmd/device-plugin
 
 # 校验 scheduler 配置
 check-scheduler:

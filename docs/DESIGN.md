@@ -3,7 +3,7 @@
 > 基于 Kubernetes 的 GPU 拓扑感知与 Gang 调度器
 >
 > 版本：v0.6（评审修订版 5）
-> 状态：设计定稿，进入 M1 开发（M1 地基已在实现中，见文末"实现状态"）
+> 状态：设计定稿，M1/M2 已完成、M3 进行中（见文末"实现状态"）
 > 适用范围：大模型分布式训练（PyTorch DDP / DeepSpeed / Megatron-LM / FSDP）在 K8s 上的资源调度
 > 修订记录：v0.2 依据 `docs/REVIEW.md` 修复 C1/C2/C3 关键问题及 M1–M5、m1–m6；
 > v0.3 依据 `docs/REVIEW.md` 第二轮评审修复 N1–N9（batch 计数口径 / 超卖安全阀 / 快速失败路径等）；
@@ -1009,7 +1009,7 @@ TopoGang/
 | **M3 拓扑感知** | 3 周 | Topo 插件（Filter/Score）+ AllocationTracker + best-fit 决策 + topo-gpu-plugin + 对账 | E2E：双域机器任务不跨域；拓扑命中率 100%（强制模式）；对账漂移仅告警不覆盖；`gpu-uuids` 链路生效 |
 | **M4 打磨** | 2 周 | 抢占（组级）、性能基准、指标/日志、README + 演示脚本 + NCCL 收益对比 + 面试 demo | 1000 Pod 压测 p99 < 500ms；全场景用例绿；同域 vs 跨域收益数据产出；文档齐备 |
 
-> 状态标注：M1 ✅ 已完成（核心逻辑 + 单测）；M2 🚧 核心语义已完成（`pkg/gang` / `pkg/controller/state` / `pkg/plugins/gang`，评审关键项 R1/N1/S4/T4/T5 单测固化），真实 Controller 适配与双调度器部署待续；M3 / M4 ⬜ 未开始。详见 §16 / §17 实现状态。
+> 状态标注：M1 ✅ 已完成；M2 ✅ 已完成（核心语义 + Controller Reconcile + 双调度器部署清单，真实 kube-scheduler framework 注册需集群环境）；M3 🚧 进行中（AllocationTracker + Topo 插件 Filter/Score + device plugin 已实现，真实对账闭环待续）；M4 ⬜ 未开始。详见 §16 / §17 / §18 实现状态。
 
 > 单周投入约 20h，可穿插招聘流程使用。
 
@@ -1141,5 +1141,21 @@ TopoGang/
 - ③ ✅ 双调度器部署清单（config/deploy + config/rbac）
 - ④ ⬜ 组件测试 envtest 验证 released-generation 闭环（当前用 fake client 单测覆盖；envtest 需 kube-apiserver/etcd 二进制，集群环境补）
 - ⑤ ⬜ M2 压测验证（预检复杂度、batch 语义，§14 遗留，M4 统一压测）
+
+## 18. 实现状态（M3，随开发更新）
+
+| 模块 | 位置 | 状态 |
+|------|------|------|
+| GPU AllocationTracker（§7.3.3：allocate/release/free/selectGPUs + epoch 单调 + locked 安全阀 N2/T1 + 管理域约束 + 心跳过期 T2） | `pkg/allocator/allocator.go` | ✅ 已实现 + 单测 |
+| SelectGPUs 共享 best-fit 决策（§8.1 M2/R4：复用 `topo.BestFitDomain`，保证"打分评估的域=实际落地的域"） | `pkg/allocator` `SelectGPUs` | ✅ 已实现 + 单测 |
+| Topo 插件 Filter（§7.3.2：数量过滤 + 强制 nvlink 域容量 + 拓扑健康分级 T2/s9） | `pkg/plugins/topo/topo_plugin.go` | ✅ 已实现 + 单测 |
+| Topo 插件 Score（§8.2：TopoAffinity + GangAffinity + Balance，权重 W1/W2/W3） | `pkg/plugins/topo/topo_plugin.go` | ✅ 已实现 + 单测 |
+| topo-gpu-plugin 分配逻辑（§7.4 C1/N7：读取 gpu-uuids annotation + checkpoint 物理基准校验 + 冲突检测） | `pkg/deviceplugin/allocator.go` | ✅ 已实现 + 单测 |
+| topo-gpu-plugin gRPC 服务（§7.4：ListAndWatch/Allocate/注册 kubelet，`topogang.io/gpu`） | `pkg/deviceplugin/plugin.go` | ✅ 已实现 |
+| device plugin 入口（mock 模式无 GPU 可运行） | `cmd/device-plugin` | ✅ 已实现 |
+
+**M3 关键正确性（评审项）**：N2（物理占用超前 locked 安全阀，SelectGPUs 排除）、T1（管理域内混部 locked 兜底）、T2（心跳过期完全停止分配 vs 数据缺失数量过滤不选卡）、S2（epoch 单调递增驱动预检缓存失效）、M2（Score 与 SelectGPUs 共享 best-fit）均已实现并单测。
+
+**M3 剩余项**：① topo-agent 对接真实集群 Writer（当前内存/NodeGpuTopology 对接待补）；② topo-agent 监听 Pod annotation 回填 `allocatedTo` 对账闭环（§7.3.3 校正路径）；③ device plugin 真实设备枚举（当前 mock）与 kubelet device manager checkpoint 读取；④ 对账漂移告警指标；⑤ 真实 envtest/E2E。
 
 *文档结束。后续将按 §13 里程碑推进；每个模块实现时同步更新本节"实现状态"标注。*
