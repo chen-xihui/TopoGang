@@ -3,7 +3,7 @@
 > 基于 Kubernetes 的 GPU 拓扑感知与 Gang 调度器
 >
 > 版本：v0.6（评审修订版 5）
-> 状态：设计定稿，M1/M2/M3 已完成、M4 待启动（见文末"实现状态"）
+> 状态：设计定稿，M1–M4 核心全部完成，集群真实集成验证待续（见文末"实现状态"）
 > 适用范围：大模型分布式训练（PyTorch DDP / DeepSpeed / Megatron-LM / FSDP）在 K8s 上的资源调度
 > 修订记录：v0.2 依据 `docs/REVIEW.md` 修复 C1/C2/C3 关键问题及 M1–M5、m1–m6；
 > v0.3 依据 `docs/REVIEW.md` 第二轮评审修复 N1–N9（batch 计数口径 / 超卖安全阀 / 快速失败路径等）；
@@ -1009,7 +1009,7 @@ TopoGang/
 | **M3 拓扑感知** | 3 周 | Topo 插件（Filter/Score）+ AllocationTracker + best-fit 决策 + topo-gpu-plugin + 对账 | E2E：双域机器任务不跨域；拓扑命中率 100%（强制模式）；对账漂移仅告警不覆盖；`gpu-uuids` 链路生效 |
 | **M4 打磨** | 2 周 | 抢占（组级）、性能基准、指标/日志、README + 演示脚本 + NCCL 收益对比 + 面试 demo | 1000 Pod 压测 p99 < 500ms；全场景用例绿；同域 vs 跨域收益数据产出；文档齐备 |
 
-> 状态标注：M1 ✅ 已完成；M2 ✅ 已完成（核心语义 + Controller Reconcile + 双调度器部署清单，真实 kube-scheduler framework 注册需集群环境）；M3 ✅ 已完成（AllocationTracker + Topo 插件 + device plugin + 对账闭环；真实设备枚举与 envtest 待集群环境）；M4 ⬜ 未开始。详见 §16 / §17 / §18 实现状态。
+> 状态标注：M1 ✅ / M2 ✅ / M3 ✅ / M4 ✅ 核心全部完成（抢占 + 性能基准 + 指标）；集群环境待补真实集成验证（kube-scheduler framework 注册、envtest/E2E、NCCL 收益实测）。详见 §16–§19 实现状态。
 
 > 单周投入约 20h，可穿插招聘流程使用。
 
@@ -1161,5 +1161,20 @@ TopoGang/
 **M3 关键正确性（评审项）**：N2（物理占用超前 locked 安全阀，SelectGPUs 排除；漂移分类处置：记账超前清理 / 占用超前 lock）、T1（管理域内混部 locked 兜底）、T2（心跳过期完全停止分配 vs 数据缺失数量过滤不选卡）、S2（epoch 单调递增驱动预检缓存失效）、M2（Score 与 SelectGPUs 共享 best-fit）均已实现并单测。
 
 **M3 剩余项**：① device plugin 真实设备枚举（当前 mock）与 kubelet device manager checkpoint 读取；② 对账漂移告警指标（`topogang_allocation_drift_events`，§11.2）；③ 真实 envtest/E2E 集群验证；④ NUMA（numaNode）纳入打分（v2 规划，§3.2）。
+
+## 19. 实现状态（M4，随开发更新）
+
+| 模块 | 位置 | 状态 |
+|------|------|------|
+| 组级抢占（§8.5：整组抢占决策 + 低优受害者筛选 + 确定性排序 + 默认关闭） | `pkg/plugins/gang/preemptor.go` | ✅ 已实现 + 单测 |
+| 性能基准（§10.3 用例 6/11/12：1000 Pod p99、1000 成员批量放行、混跑小任务无饿死） | `pkg/bench/bench_test.go` | ✅ 已实现 + 单测 |
+| 可观测指标（§11.2：scheduling_cycle / gang_queue / waiting_pods / 命中率 / 碎片率 / 漂移等 11 项） | `pkg/metrics/metrics.go` | ✅ 已实现 + 单测 |
+| 推导类指标（§11.2：命中率 / 碎片率 / 跨域比，由 allocator 状态推导） | `pkg/metrics/derived.go` | ✅ 已实现 + 单测 |
+
+**M4 关键口径（评审项）**：t4（scheduling_cycle 按每次调度 attempt 记录、不含 Permit 等待）、m6（preempted_pods / timeout_retries / cross_domain_ratio / drift_events 指标）、用例 11/12（大组 batch 限制下小任务不饿死、1000 成员批量放行无死等）均已实现并单测。
+
+**M4 剩余项（集群环境）**：① Prometheus 采集端点接入（controller/scheduler 暴露 /metrics）；② 真实集群 E2E 与全场景用例（§10.3 用例 1–18）回归；③ NCCL 同域 vs 跨域收益对比 demo（需真机/mock 数据，§10.3 用例 7）；④ 面试演示脚本与简历口径整理；⑤ README 最终评审。
+
+> **项目里程碑达成**：M1–M4 核心全部实现（见 §16–§19），12 个测试包全部通过。集群环境待补项为真实集成验证（kube-scheduler framework 注册、envtest/E2E、NCCL 收益实测）。
 
 *文档结束。后续将按 §13 里程碑推进；每个模块实现时同步更新本节"实现状态"标注。*

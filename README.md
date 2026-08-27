@@ -17,8 +17,8 @@
 |------|------|
 | **M1 地基**：CRD + topo-agent + 域划分/选团算法 | ✅ 已完成（核心逻辑 + 单测） |
 | **M2 Gang 调度**：PodGroup Controller + Gang 插件 + 双调度器 | ✅ 已完成（Gang 语义 + Controller + 部署清单；真实 kube-scheduler framework 注册需集群环境） |
-| **M3 拓扑感知**：Topo 插件 + AllocationTracker + device plugin | ✅ **核心已完成**（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环；真实设备枚举/envtest 需集群环境） |
-| **M4 打磨**：抢占 / 性能基准 / 指标 / demo | 🚧 **下一里程碑** |
+| **M3 拓扑感知**：Topo 插件 + AllocationTracker + device plugin | ✅ 已完成（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环；真实设备枚举/envtest 需集群环境） |
+| **M4 打磨**：抢占 / 性能基准 / 指标 / demo | ✅ **核心已完成**（组级抢占 + 性能基准 + 指标；NCCL 收益实测/面试 demo 需集群环境） |
 
 ## 当前代码结构
 
@@ -39,6 +39,9 @@ pkg/gang/                       # Gang 核心语义：Permit All-or-Nothing / �
 pkg/controller/state/           # PodGroup 状态机（§9.1：phase 迁移 / 超时 / released-generation 闭环 / 失败终态）
 pkg/controllers/                # PodGroup Controller Reconcile（controller-runtime，§7.2：finalizer/孤儿解绑/闭环）
 pkg/plugins/gang/               # Gang 插件编排（QueueSort/PreFilter/Filter/PreBind/Permit/Reserve/Unreserve/PostFilter）
+pkg/plugins/gang/preemptor.go   # 组级抢占（§8.5：整组抢占决策 + 低优受害者筛选）
+pkg/metrics/                    # 可观测指标（§11.2：调度周期/排队时长/命中率/碎片率/漂移）
+pkg/bench/                      # 性能基准（§10.3 用例 6/11/12：1000 Pod p99 / 批量放行 / 混跑）
 cmd/agent/                      # topo-agent 入口
 cmd/controller/                 # topogang-controller 入口（leader election）
 cmd/scheduler/                  # topogang-scheduler 入口（配置校验 + 插件注册点）
@@ -103,9 +106,19 @@ go run ./cmd/agent --node-name=node-a --source=nvidia-smi --writer=cluster
 - **选团策略**：硬约束（容量 / locked）与软打分（`domainScore = β·兄弟亲和 + α·容量富余 − γ·跨域惩罚`）分离。
 - **best-fit 决策**：`pkg/topo.BestFitDomain` 是 **Score 与 SelectGPUs 共享**的最优域选择函数（§8.1 M2/R4），保证"打分评估的域 = 实际落地的域"。
 
-## 下一步（M4）
+## 里程碑达成（M1–M4 核心完成）
 
-M1/M2/M3 核心均已达成：Gang 调度（All-or-Nothing + GangPrecheck + 状态机）+ 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin）+ 对账闭环（allocatedTo 回填 + 漂移分类处置 N2）。集群环境待补：真实 kube-scheduler framework 注册、device plugin 真实设备枚举、envtest/E2E。下一里程碑 **M4**：组级抢占落地、性能基准（1000 Pod p99<500ms）、指标/日志（§11.2）、NCCL 收益对比 demo。
+Gang 调度（All-or-Nothing + GangPrecheck + 状态机 + Controller）+ 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环）+ M4 打磨（组级抢占 + 性能基准 + 指标）。12 个测试包全部通过，性能基准验证 1000 Pod 决策 p99 远低于 500ms 目标。
+
+**集群环境待补（真实集成验证）**：kube-scheduler framework 插件注册、device plugin 真实设备枚举、envtest/E2E、NCCL 同域 vs 跨域收益实测。
+
+## 面试 demo 口径（简历亮点，§1.1）
+
+- **调度内核**：Scheduler Framework 插件实现 8 个扩展点（QueueSort/PreFilter/Filter/PostFilter/Score/Reserve/Permit/PreBind）。
+- **拓扑建模**：自研 GPU 拓扑图（NVLink 域 = Bron–Kerbosch 极大团 + 选团策略），六级链路权重。
+- **All-or-Nothing**：GangPrecheck 组级预检 + Permit 原子放行 + 超时回滚三层机制；评审 off-by-one（R1）等关键正确性单测固化。
+- **可移植性**：Source 接口解耦 nvidia-smi/DCGM/mock；Device plugin 只执行不决策。
+- **生产级工程**：双调度器共存、leader election、对账漂移分类处置（locked 安全阀）、Prometheus 指标、性能基准。
 
 ---
 

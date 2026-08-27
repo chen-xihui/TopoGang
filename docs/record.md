@@ -117,3 +117,74 @@ M3 剩余项（真实对账闭环）
 
 下一步
 可推进：M3 剩余项（topo-agent 集群对账闭环）或直接进入 M4（组级抢占落地 + 性能基准 + 指标/日志 + NCCL 收益 demo）。要继续吗？
+
+本轮完成内容（M3 对账闭环）
+新增文件：
+
+模块	文件	设计章节
+NodeGpuTopology ClusterWriter	pkg/agent/cluster_writer.go	§7.1
+topo-agent Pod 对账回填	pkg/agent/pod_reconciler.go	§7.3.3 校正路径
+对账漂移分类处置	pkg/allocator/reconcile.go	§7.3.3 N2
+agent 集群模式入口	cmd/agent（--writer=cluster）	§7.1
+关键能力
+ClusterWriter：controller-runtime 对接 NodeGpuTopology CRD（创建/更新），采集失败标记不健康（T2 数据缺失），GetView 供对账；BackfillAllocation 回填 allocatedTo
+PodReconciler：监听 Pod 的 gpu-uuids annotation，回填 allocatedTo（§7.3.3 校正路径，对账基准非写入源）
+漂移分类处置（N2）：
+记账超前（tracker 有记录、agent 观测空闲）→ 核对清理
+物理占用超前（agent 观测占用、tracker 空闲）→ GPU 打 locked 安全阀（不篡改记账，防超卖）
+单测覆盖（全部通过）
+ClusterWriter：创建/更新/GetView/BackfillAllocation（fake client）
+漂移处置：记账超前清理、物理占用超前 lock、无漂移、locked 不影响记账
+工程完善
+重命名 Writer 接口 Get → GetView（避免与嵌入式 client.Client.Get 冲突）
+cmd/agent 支持 --writer=cluster（真实集群）与 --writer=memory（无集群调试）
+修复 grpc.WithInsecure 弃用
+项目整体进度（M1-M3 全部完成）
+M1 地基：CRD + topo-agent + 域划分/选团 ✅
+M2 Gang 调度：Permit/GangPrecheck/状态机/Controller/部署清单 ✅
+M3 拓扑感知：AllocationTracker + Topo Filter/Score + device plugin + 对账闭环 ✅
+11 个测试包全部通过，4 个可执行文件可构建
+M4（下一里程碑）
+组级抢占落地、性能基准（1000 Pod p99<500ms）、指标/日志（§11.2）、NCCL 收益对比 demo。
+
+
+
+M4（打磨）核心已完成，M1–M4 全部交付，编译/vet/测试全部通过。
+
+本轮完成内容（M4）
+新增 3 个包：
+
+模块	文件	设计章节
+组级抢占	pkg/plugins/gang/preemptor.go	§8.5
+性能基准	pkg/bench/bench_test.go	§10.3 用例 6/11/12
+可观测指标	pkg/metrics/metrics.go + derived.go	§11.2
+组级抢占（§8.5）
+整组抢占决策（只驱逐低优组全部 GPU Pod，避免碎片）
+仅抢占严格更低优先级组；默认关闭（Gang 抢占易破坏组完整性）
+确定性排序（优先级低者先，同优先级按组名）
+性能基准（§10.3）
+用例 6：1000 Pod SelectGPUs p99 ≈ 0s（远低于 500ms 目标）
+用例 12：1000 成员批量放行 1.5ms，且第 1000 个成员才放行（off-by-one 无回归）
+用例 11：混跑小任务无饿死（用中位数 + warm-up 消除微基准 GC 噪声）
+并发分配无竞态 panic
+可观测指标（§11.2，11 项）
+scheduling_cycle_seconds（histogram，t4 口径：按每次 attempt、不含 Permit 等待）
+gang_queue_time_seconds / gang_waiting_pods / affinity_hit_rate / fragment_rate / agent_heartbeat_stale / preempted_pods / timeout_retries / cross_domain_ratio / allocation_drift_events / visibility_window_seconds
+推导层计算命中率/碎片率/跨域比
+单测覆盖
+抢占器（默认关闭/仅低优/整组驱逐/确定性排序）
+指标（注册/口径/命中率/碎片率）
+benchmark（1000 Pod p99/批量放行/混跑/并发）
+项目里程碑达成
+里程碑	状态
+M1 地基（CRD + topo-agent + 域划分/选团）	✅
+M2 Gang 调度（Permit/GangPrecheck/状态机/Controller/部署清单）	✅
+M3 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin + 对账）	✅
+M4 打磨（组级抢占 + 性能基准 + 指标）	✅
+12 个测试包全部通过，4 个可执行文件可构建
+评审关键正确性项（R1/N1/S2/S4/T2/T4/T5/N2/N3 等）全部单测固化
+设计文档新增 §16–§19 实现状态，README 含面试 demo 口径
+集群环境待补（真实集成验证）
+kube-scheduler framework 插件注册、device plugin 真实设备枚举、envtest/E2E、NCCL 同域 vs 跨域收益实测。
+
+至此设计文档 §13 里程碑的全部核心开发已按计划完成。如需继续，可补集群真实集成验证或完善部署/演示脚本。
