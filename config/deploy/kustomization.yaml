@@ -10,6 +10,5 @@ resources:
 - controller-deployment.yaml
 - agent-daemonset.yaml
 - webhook.yaml
-- ../rbac/role.yaml
-- ../rbac/scheduler-rbac.yaml
-- ../rbac/agent-rbac.yaml
+- ../rbac
+

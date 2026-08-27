@@ -1170,11 +1170,24 @@ TopoGang/
 | 性能基准（§10.3 用例 6/11/12：1000 Pod p99、1000 成员批量放行、混跑小任务无饿死） | `pkg/bench/bench_test.go` | ✅ 已实现 + 单测 |
 | 可观测指标（§11.2：scheduling_cycle / gang_queue / waiting_pods / 命中率 / 碎片率 / 漂移等 11 项） | `pkg/metrics/metrics.go` | ✅ 已实现 + 单测 |
 | 推导类指标（§11.2：命中率 / 碎片率 / 跨域比，由 allocator 状态推导） | `pkg/metrics/derived.go` | ✅ 已实现 + 单测 |
+| 端到端调度模拟器（§12 test/e2e：编排 Gang + AllocationTracker + 状态机 + Topo） | `test/e2e/simulator.go` | ✅ 已实现 |
+| 全场景用例回归（§10.3 用例 1/2/8/9/10/14/16/17） | `test/e2e/scenarios_test.go` | ✅ 已实现 + 单测 |
+| 部署 kustomization 完整性（`kubectl kustomize config/deploy` 渲染校验） | `config/**/kustomization.yaml` | ✅ 已校验（Namespace/2CRD/4SA/3Role/3Binding/ConfigMap/3Deployment/DaemonSet/Webhook） |
 
 **M4 关键口径（评审项）**：t4（scheduling_cycle 按每次调度 attempt 记录、不含 Permit 等待）、m6（preempted_pods / timeout_retries / cross_domain_ratio / drift_events 指标）、用例 11/12（大组 batch 限制下小任务不饿死、1000 成员批量放行无死等）均已实现并单测。
 
-**M4 剩余项（集群环境）**：① Prometheus 采集端点接入（controller/scheduler 暴露 /metrics）；② 真实集群 E2E 与全场景用例（§10.3 用例 1–18）回归；③ NCCL 同域 vs 跨域收益对比 demo（需真机/mock 数据，§10.3 用例 7）；④ 面试演示脚本与简历口径整理；⑤ README 最终评审。
+**全场景用例模拟回归（§10.3，test/e2e 已覆盖）**：
+- 用例 1 Gang 原子性：集群不足时 0 分配（GangPrecheck 整组拦截）；补卡后 8 成员原子放行
+- 用例 2 超时回退：scheduledByGroup 清零（S4）
+- 用例 8 batch 计数：minMember=8, batch=4 无死等，第 8 成员放行
+- 用例 9 快速失败：任一成员失败 → 整组 Reject（N3）
+- 用例 10 超卖安全阀：locked GPU 不被 SelectGPUs 选中（N2）
+- 用例 14 管理域约束：心跳过期节点不参与调度（S1/T1/T2）
+- 用例 16 回退补位：phase 非 Running 时补位成员进入等待（T4/t7）
+- 用例 17 孤儿 Pod：孤儿 Wait 限时、无组单 Pod Success（T5）
 
-> **项目里程碑达成**：M1–M4 核心全部实现（见 §16–§19），12 个测试包全部通过。集群环境待补项为真实集成验证（kube-scheduler framework 注册、envtest/E2E、NCCL 收益实测）。
+**M4 剩余项（集群环境）**：① Prometheus 采集端点接入（controller/scheduler 暴露 /metrics）；② 真实集群 E2E（kind + 双调度器，§10.3 用例 1–18 全量，当前已用模拟器覆盖 8 项关键场景）；③ NCCL 同域 vs 跨域收益对比 demo（需真机/mock 数据，§10.3 用例 7）；④ 面试演示脚本与简历口径整理；⑤ README 最终评审。
+
+> **项目里程碑达成**：M1–M4 核心全部实现（见 §16–§19），**13 个测试包全部通过**（含 test/e2e 全场景回归）。集群环境待补项为真实集成验证（kube-scheduler framework 注册、kind E2E、NCCL 收益实测）。
 
 *文档结束。后续将按 §13 里程碑推进；每个模块实现时同步更新本节"实现状态"标注。*

@@ -42,6 +42,8 @@ pkg/plugins/gang/               # Gang 插件编排（QueueSort/PreFilter/Filter
 pkg/plugins/gang/preemptor.go   # 组级抢占（§8.5：整组抢占决策 + 低优受害者筛选）
 pkg/metrics/                    # 可观测指标（§11.2：调度周期/排队时长/命中率/碎片率/漂移）
 pkg/bench/                      # 性能基准（§10.3 用例 6/11/12：1000 Pod p99 / 批量放行 / 混跑）
+test/e2e/                       # 端到端调度模拟器 + 全场景用例回归（§10.3 用例 1/2/8/9/10/14/16/17）
+config/**/kustomization.yaml    # 部署清单（`kubectl kustomize config/deploy` 已渲染校验）
 cmd/agent/                      # topo-agent 入口
 cmd/controller/                 # topogang-controller 入口（leader election）
 cmd/scheduler/                  # topogang-scheduler 入口（配置校验 + 插件注册点）
@@ -108,9 +110,9 @@ go run ./cmd/agent --node-name=node-a --source=nvidia-smi --writer=cluster
 
 ## 里程碑达成（M1–M4 核心完成）
 
-Gang 调度（All-or-Nothing + GangPrecheck + 状态机 + Controller）+ 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环）+ M4 打磨（组级抢占 + 性能基准 + 指标）。12 个测试包全部通过，性能基准验证 1000 Pod 决策 p99 远低于 500ms 目标。
+Gang 调度（All-or-Nothing + GangPrecheck + 状态机 + Controller）+ 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环）+ M4 打磨（组级抢占 + 性能基准 + 指标）。**13 个测试包全部通过**（含 test/e2e 全场景用例回归：用例 1/2/8/9/10/14/16/17），性能基准验证 1000 Pod 决策 p99 远低于 500ms 目标，部署清单 `kubectl kustomize config/deploy` 渲染校验通过。
 
-**集群环境待补（真实集成验证）**：kube-scheduler framework 插件注册、device plugin 真实设备枚举、envtest/E2E、NCCL 同域 vs 跨域收益实测。
+**集群环境待补（真实集成验证）**：kube-scheduler framework 插件注册、device plugin 真实设备枚举、kind 全量 E2E、NCCL 同域 vs 跨域收益实测。
 
 ## 面试 demo 口径（简历亮点，§1.1）
 
