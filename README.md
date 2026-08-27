@@ -17,8 +17,8 @@
 |------|------|
 | **M1 地基**：CRD + topo-agent + 域划分/选团算法 | ✅ 已完成（核心逻辑 + 单测） |
 | **M2 Gang 调度**：PodGroup Controller + Gang 插件 + 双调度器 | ✅ 已完成（Gang 语义 + Controller + 部署清单；真实 kube-scheduler framework 注册需集群环境） |
-| **M3 拓扑感知**：Topo 插件 + AllocationTracker + device plugin | 🚧 **进行中（AllocationTracker + Topo Filter/Score + device plugin 已实现，对账闭环待续）** |
-| M4 打磨：抢占 / 性能基准 / 指标 / demo | 未开始 |
+| **M3 拓扑感知**：Topo 插件 + AllocationTracker + device plugin | ✅ **核心已完成**（AllocationTracker + Topo Filter/Score + device plugin + 对账闭环；真实设备枚举/envtest 需集群环境） |
+| **M4 打磨**：抢占 / 性能基准 / 指标 / demo | 🚧 **下一里程碑** |
 
 ## 当前代码结构
 
@@ -86,15 +86,26 @@ go run ./cmd/agent --node-name=node-a --source=nvidia-smi
 # 内部调用 `nvidia-smi topo -m` 解析物理互联矩阵
 ```
 
+### 集群模式（真实集群，写 NodeGpuTopology CRD + 对账回填）
+
+```bash
+go run ./cmd/agent --node-name=node-a --source=nvidia-smi --writer=cluster
+# 对接 NodeGpuTopology CRD，监听 Pod 的 gpu-uuids annotation 回填 allocatedTo（§7.3.3 校正路径）
+```
+
+对账漂移分类处置（§7.3.3 N2，`pkg/allocator/reconcile.go`）：
+- **记账超前**（tracker 有记录、agent 观测空闲）→ 核对清理
+- **物理占用超前**（agent 观测占用、tracker 空闲）→ 该 GPU 打 `locked` 安全阀，防超卖
+
 ## 关键算法（M1 交付，§8.1）
 
 - **NVLink 域划分**：`pkg/topo.FindNvlinkDomains` 用 **Bron–Kerbosch 求极大团**（`DomainClique` 策略），可退化为连通分量（`DomainConnected`）。
 - **选团策略**：硬约束（容量 / locked）与软打分（`domainScore = β·兄弟亲和 + α·容量富余 − γ·跨域惩罚`）分离。
 - **best-fit 决策**：`pkg/topo.BestFitDomain` 是 **Score 与 SelectGPUs 共享**的最优域选择函数（§8.1 M2/R4），保证"打分评估的域 = 实际落地的域"。
 
-## 下一步（M3 续 / M4）
+## 下一步（M4）
 
-M3 核心已完成：AllocationTracker（记账/epoch/locked 安全阀）+ Topo 插件（Filter/Score）+ topo-gpu-plugin（gpu-uuids 校验）。剩余：① topo-agent 对接真实集群 Writer 与 `allocatedTo` 对账闭环；② device plugin 真实设备枚举；③ 对账漂移告警指标。之后进入 **M4**（组级抢占、性能基准、指标/日志、NCCL 收益 demo）。
+M1/M2/M3 核心均已达成：Gang 调度（All-or-Nothing + GangPrecheck + 状态机）+ 拓扑感知（AllocationTracker + Topo Filter/Score + device plugin）+ 对账闭环（allocatedTo 回填 + 漂移分类处置 N2）。集群环境待补：真实 kube-scheduler framework 注册、device plugin 真实设备枚举、envtest/E2E。下一里程碑 **M4**：组级抢占落地、性能基准（1000 Pod p99<500ms）、指标/日志（§11.2）、NCCL 收益对比 demo。
 
 ---
 

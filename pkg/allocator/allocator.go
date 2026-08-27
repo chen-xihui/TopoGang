@@ -248,6 +248,21 @@ type GPUAllocation struct {
 	Pod  string
 }
 
+// IsAllocated 判断 tracker 是否认为该 GPU 已分配。
+func (t *AllocationTracker) IsAllocated(node, gpuID string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.allocations[node][gpuID]
+	return ok
+}
+
+// Owner 返回 tracker 中该 GPU 的属主。
+func (t *AllocationTracker) Owner(node, gpuID string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.allocations[node][gpuID]
+}
+
 // Allocations 返回当前全部分配（对账/重建）。
 func (t *AllocationTracker) Allocations() []GPUAllocation {
 	t.mu.RLock()

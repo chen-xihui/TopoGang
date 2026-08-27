@@ -46,8 +46,8 @@ func (w *InMemoryWriter) Write(_ context.Context, nodeName string, topology *top
 	return generation > prevGen, nil
 }
 
-// Get 返回某节点的轻量视图。
-func (w *InMemoryWriter) Get(_ context.Context, name types.NamespacedName) (*GpuTopologyView, error) {
+// GetView 返回某节点的轻量视图。
+func (w *InMemoryWriter) GetView(_ context.Context, name types.NamespacedName) (*GpuTopologyView, error) {
 	w.store.mu.RLock()
 	defer w.store.mu.RUnlock()
 	node := name.Name

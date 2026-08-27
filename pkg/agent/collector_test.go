@@ -23,7 +23,7 @@ func TestCollector_DiscoverAndWrite(t *testing.T) {
 	// 手动执行一次
 	col.discoverAndWrite(context.Background())
 
-	view, err := wr.Get(context.Background(), types.NamespacedName{Name: "node-a"})
+	view, err := wr.GetView(context.Background(), types.NamespacedName{Name: "node-a"})
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestCollector_WriteOnce(t *testing.T) {
 	})
 	col.discoverAndWrite(context.Background())
 	col.discoverAndWrite(context.Background()) // gen 递增 => 应更新到 2
-	view, _ := wr.Get(context.Background(), types.NamespacedName{Name: "node-a"})
+	view, _ := wr.GetView(context.Background(), types.NamespacedName{Name: "node-a"})
 	if view.Generation != 2 {
 		t.Fatalf("expected generation 2, got %d", view.Generation)
 	}

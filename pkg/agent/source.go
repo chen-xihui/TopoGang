@@ -21,8 +21,8 @@ type Writer interface {
 	// Write 以给定节点名写（创建或更新）NodeGpuTopology。
 	// generation 由调用方维护；返回值表示本次写入是否实际发生（CAS 语义）。
 	Write(ctx context.Context, nodeName string, topology *topo.GpuTopology, generation int64) (bool, error)
-	// Get 读取某节点的 NodeGpuTopology 当前状态（供对账）。
-	Get(ctx context.Context, name types.NamespacedName) (*GpuTopologyView, error)
+	// GetView 读取某节点的 NodeGpuTopology 当前状态（供对账）。
+	GetView(ctx context.Context, name types.NamespacedName) (*GpuTopologyView, error)
 }
 
 // GpuTopologyView 是 Writer 返回的轻量视图（避免把 API 对象暴露给 Source 层）。

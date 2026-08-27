@@ -82,3 +82,38 @@ M2 完成度总结
 
 下一步
 进入 M3（拓扑感知）：Topo 插件（Filter/Score）+ AllocationTracker + best-fit 决策落地（对接 M1 的 pkg/topo/bestfit.go）+ topo-gpu-plugin + 对账。要继续 M3 吗？
+
+本轮完成内容（M3）
+新增 3 个包 + 1 个入口：
+
+模块	文件	设计章节
+GPU AllocationTracker	pkg/allocator/allocator.go	§7.3.3
+Topo 插件（Filter/Score）	pkg/plugins/topo/topo_plugin.go	§7.3.2 / §8.2
+topo-gpu-plugin 分配逻辑	pkg/deviceplugin/allocator.go	§7.4
+topo-gpu-plugin gRPC 服务	pkg/deviceplugin/plugin.go	§7.4
+device plugin 入口	cmd/device-plugin/main.go	§5.2
+AllocationTracker 覆盖的评审项
+记账：Allocate/Release/FreeGPUs，以调度器 Reserve/Unreserve 为唯一写入源（M1）
+epoch 单调递增：任何 Reserve/Release 递增 → GangPrecheck 预检缓存失效（S2）
+locked 安全阀：物理占用超前时封锁 GPU，SelectGPUs/Allocate 排除（N2/T1）
+管理域约束：心跳过期节点完全停止分配（T2）
+共享 best-fit：SelectGPUs 复用 topo.BestFitDomain，保证"打分评估的域=实际落地的域"（§8.1 M2/R4）
+Topo 插件
+Filter：数量过滤 + 强制 nvlink 单域容量 + 拓扑健康三级（心跳过期拒绝/数据缺失仅数量过滤不选卡）
+Score：W1·TopoAffinity + W2·GangAffinity + W3·Balance（§8.2，含兄弟亲和、跨节点聚拢 R5）
+device plugin（§7.4）
+上报 topogang.io/gpu 扩展资源
+Allocate 读取 gpu-uuids annotation，以 kubelet checkpoint 为物理基准校验（N7），冲突检测防伪造
+"决策在调度器、执行在插件"（C1），mock 模式无 GPU 可运行
+单测覆盖（全部通过）
+Allocator：记账/双分配冲突/locked 错误/SelectGPUs 单域装箱/兄弟亲和/心跳过期拒绝/NoFit/epoch 单调/域分桶
+Topo 插件：数量过滤/强制 nvlink 拒绝与通过/健康分级/Score 健康 vs 不健康/Balance/GangAffinity/与 allocator 集成
+Deviceplugin：gpu-uuids 解析/校验通过/计数不匹配/冲突检测(N7)/设备不存在/自占用幂等
+当前进度
+✅ M1 / M2 / M3 核心全部完成
+四个可执行文件可构建：topo-agent、topogang-controller、topogang-scheduler、topo-gpu-plugin
+M3 剩余项（真实对账闭环）
+① topo-agent 对接真实集群 Writer 与 allocatedTo 对账；② device plugin 真实设备枚举；③ 对账漂移告警指标。
+
+下一步
+可推进：M3 剩余项（topo-agent 集群对账闭环）或直接进入 M4（组级抢占落地 + 性能基准 + 指标/日志 + NCCL 收益 demo）。要继续吗？

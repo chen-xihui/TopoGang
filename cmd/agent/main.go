@@ -17,8 +17,13 @@ import (
 	"syscall"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/chenxihui/TopoGang/apis"
 	"github.com/chenxihui/TopoGang/pkg/agent"
 	"github.com/chenxihui/TopoGang/pkg/topo"
 )
@@ -47,27 +52,68 @@ func main() {
 		klog.Fatalf("build source: %v", err)
 	}
 
-	var wr agent.Writer
-	switch *writerType {
-	case "memory":
-		wr = agent.NewInMemoryWriter()
-	default:
-		klog.Fatalf("unknown writer %q", *writerType)
-	}
-
 	ds := topo.DomainClique
 	if *strategy == "connected" {
 		ds = topo.DomainConnected
 	}
 
+	switch *writerType {
+	case "memory":
+		wr := agent.NewInMemoryWriter()
+		runCollector(ctx, *nodeName, src, *interval, ds, wr)
+	case "cluster":
+		// 真实集群模式：controller-runtime 对接 NodeGpuTopology CRD + Pod 对账回填
+		runClusterAgent(ctx, *nodeName, src, *interval, ds)
+	default:
+		klog.Fatalf("unknown writer %q", *writerType)
+	}
+}
+
+// runCollector 以内存 Writer 运行采集（无集群调试模式）。
+func runCollector(ctx context.Context, nodeName string, src agent.Source, interval time.Duration, ds topo.DomainStrategy, wr agent.Writer) {
 	collector := agent.NewCollector(agent.CollectorOptions{
-		NodeName:         *nodeName,
-		DiscoverInterval: *interval,
+		NodeName:         nodeName,
+		DiscoverInterval: interval,
 		DomainStrategy:   ds,
 		Source:           src,
 		Writer:           wr,
 	})
 	collector.Run(ctx)
+}
+
+// runClusterAgent 启动集群模式 agent：ClusterWriter + PodReconciler（§7.1 对账闭环）。
+func runClusterAgent(ctx context.Context, nodeName string, src agent.Source, interval time.Duration, ds topo.DomainStrategy) {
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{Scheme: agentScheme()})
+	if err != nil {
+		klog.Fatalf("unable to start agent manager: %v", err)
+	}
+	wr := agent.NewClusterWriter(mgr.GetClient())
+
+	// topo-agent 采集器（周期采集 -> 写 CRD）
+	collector := agent.NewCollector(agent.CollectorOptions{
+		NodeName:         nodeName,
+		DiscoverInterval: interval,
+		DomainStrategy:   ds,
+		Source:           src,
+		Writer:           wr,
+	})
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		go collector.Run(ctx)
+		return nil
+	})); err != nil {
+		klog.Fatalf("unable to add collector: %v", err)
+	}
+
+	// Pod 对账回填（§7.3.3 校正路径）
+	pr := &agent.PodReconciler{Client: mgr.GetClient(), Writer: wr, NodeName: nodeName}
+	if err := pr.SetupWithManager(mgr); err != nil {
+		klog.Fatalf("unable to setup pod reconciler: %v", err)
+	}
+
+	klog.Infof("starting topo-agent (cluster mode) on node %s", nodeName)
+	if err := mgr.Start(ctx); err != nil {
+		klog.Fatalf("agent manager failed: %v", err)
+	}
 }
 
 func buildSource(sourceType, mockSpec string) (agent.Source, error) {
@@ -81,8 +127,18 @@ func buildSource(sourceType, mockSpec string) (agent.Source, error) {
 	case "nvidia-smi":
 		return agent.NewNvidiaSmiSource(), nil
 	default:
-		return nil, os.ErrProcessDone // unreachable: replaced below
+		return nil, nil
 	}
+}
+
+// agentScheme 返回 agent 所需的 scheme（含 NodeGpuTopology + Pod）。
+func agentScheme() *runtime.Scheme {
+	s := runtime.NewScheme()
+	_ = corev1.AddToScheme(s)
+	if err := apis.AddToScheme(s); err != nil {
+		klog.Fatalf("unable to add topogang APIs: %v", err)
+	}
+	return s
 }
 
 func parseMockSpec(s string) (agent.MockTopologySpec, error) {
