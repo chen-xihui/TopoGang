@@ -1102,7 +1102,7 @@ TopoGang/
 | agent 入口 | `cmd/agent` | ✅ 已实现（mock 模式可运行） |
 | Makefile / README | 根目录 | ✅ 已实现 |
 
-**M1 剩余项（进入 M2 时补）**：基于 controller-runtime 的 CRD 生成与真实集群 Writer（当前用内存实现兜底）、CRD YAML 清单、kubebuilder deepcopy。
+**M1 剩余项（进入 M2 时补）**：① ✅ CRD YAML 清单已生成（§17 M2 尾期，controller-gen）；② ✅ kubebuilder deepcopy 已生成；③ 基于 controller-runtime 的真实集群 NodeGpuTopology Writer（当前用内存实现兜底，topo-agent 对接集群时补）。
 
 ## 17. 实现状态（M2，随开发更新）
 
@@ -1122,9 +1122,24 @@ TopoGang/
 | PodGroup Controller 状态机（§9.1：Pending→…→Failed + 超时 + released-generation 闭环 + t3 重置） | `pkg/controller/state/statemachine.go` | ✅ 已实现 + 单测 |
 | 失败终态观察窗口 T（§7.2 T3） | `pkg/controller/state` | ✅ 已实现 + 单测 |
 | Gang 插件编排（QueueSort/PreFilter/Permit/Reserve/Unreserve，§7.3.1） | `pkg/plugins/gang/plugin.go` | ✅ 已实现 + 单测 |
+| PodGroup Controller Reconcile（controller-runtime，§7.2：对接 CRD + finalizer + 孤儿解绑 s4 + released-generation 闭环 + 超时/失败终态） | `pkg/controllers/podgroup_controller.go` | ✅ 已实现 + 单测（fake client） |
+| API 类型 DeepCopy + scheme 注册 + kubebuilder markers | `apis/**/zz_generated.deepcopy.go`、`groupversion_info.go` | ✅ 已实现 |
+| CRD YAML 清单（controller-gen 生成） | `config/crd/bases/*.yaml` | ✅ 已生成 |
+| Controller RBAC（含 pods/update + podgroups/update，t1） | `config/rbac/role.yaml` | ✅ 已实现 |
+| controller 入口 | `cmd/controller` | ✅ 已实现 |
+| Gang 插件扩展点编排（Filter/PreBind/PostFilter，§7.3.1） | `pkg/plugins/gang/plugin.go` | ✅ 已实现 + 单测 |
+| scheduler 配置（§7.3 独立 profile：QueueSort/PreFilter/Filter/PostFilter/Score/Reserve/Permit/Bind） | `config/scheduler/scheduler-config.yaml` | ✅ 已实现 |
+| scheduler 入口（配置校验 + 插件注册点骨架） | `cmd/scheduler` | ✅ 已实现 |
+| 双调度器部署清单（§11.1：scheduler/controller/agent/webhook + RBAC） | `config/deploy/*.yaml`、`config/rbac/scheduler-rbac.yaml`、`agent-rbac.yaml` | ✅ 已实现 |
+| scheduler 插件真实 framework 注册（QueueSort/PreFilter/Permit 等映射 kube-scheduler 接口） | 待集群环境链接 `k8s.io/kubernetes` 时接入 | ⬜ 文档化（§7.3.1 表格） |
 
 **评审关键项单测固化（REVIEW 要求）**：R1（恰好 N 成员第 N 个触发放行）、N1（minMember > batch 无死等）、S4（回退清零）、T4/t7（phase==Running 防御）、T5（孤儿 vs 无组单 Pod）、S3（Failed 组拒绝）、N3（快速失败整组 Reject）、R6（定时器首次进入基准）均已单测覆盖。
 
-**M2 剩余项**：① 基于 controller-runtime 的 PodGroup Controller 落地（对接 CRD 读写 + released-generation annotation 闭环 + finalizer 清理）；② scheduler-plugins 插件适配层与独立 profile 配置；③ 双调度器部署清单；④ 组件测试（envtest）验证 released-generation 闭环；⑤ M2 压测验证（预检复杂度、batch 语义，§14 遗留）。
+**M2 剩余项**：
+- ① ✅ controller-runtime Reconcile + released-generation 闭环 + finalizer/孤儿解绑
+- ② ⬜ scheduler-plugins 插件真实 framework 注册（Gang 扩展点纯逻辑编排已完成 `pkg/plugins/gang`，映射 kube-scheduler 接口需在集群环境链接 `k8s.io/kubernetes`，本环境无集群未编译）
+- ③ ✅ 双调度器部署清单（config/deploy + config/rbac）
+- ④ ⬜ 组件测试 envtest 验证 released-generation 闭环（当前用 fake client 单测覆盖；envtest 需 kube-apiserver/etcd 二进制，集群环境补）
+- ⑤ ⬜ M2 压测验证（预检复杂度、batch 语义，§14 遗留，M4 统一压测）
 
 *文档结束。后续将按 §13 里程碑推进；每个模块实现时同步更新本节"实现状态"标注。*

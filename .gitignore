@@ -1,0 +1,11 @@
+# Build outputs
+/bin/
+
+# Go
+*.exe
+*.exe~
+*.test
+
+# Test artifacts
+*.out
+*.prof

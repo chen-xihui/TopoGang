@@ -1,0 +1,59 @@
+# topo-agent DaemonSet（§5.2 / §7.1 / §11.1）。
+#
+# 每节点采集 GPU 拓扑并上报 NodeGpuTopology。安全最小化（m3/s12 修订）：
+#   - hostPath 白名单（仅 /dev 与 /var/run/nvidia）
+#   - readOnly rootfs
+#   - 最小 capability（nvidia-smi/DCGM 通常仅需读取 /dev/nvidia* 与驱动库）
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: topo-agent
+  namespace: topogang-system
+  labels:
+    app: topo-agent
+spec:
+  selector:
+    matchLabels:
+      app: topo-agent
+  template:
+    metadata:
+      labels:
+        app: topo-agent
+    spec:
+      serviceAccountName: topogang-agent
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: topo-agent
+          image: topo-agent:latest   # 构建自 cmd/agent（集群 Writer 模式）
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+            capabilities:
+              # s12：按调用链最小化，通常仅需读取设备；SYS_ADMIN 仅当确需时授予
+              drop: ["ALL"]
+              add: ["SYS_ADMIN"]
+          command:
+            - /bin/topo-agent
+            - --node-name=$(NODE_NAME)
+            - --source=nvidia-smi
+            - --interval=60s
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: nvidia-driver
+              mountPath: /usr/local/nvidia
+              readOnly: true
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: nvidia-driver
+          hostPath:
+            path: /var/run/nvidia

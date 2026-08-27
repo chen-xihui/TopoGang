@@ -1,0 +1,42 @@
+# topogang-controller Deployment（§5.2 / §7.2）。
+#
+# 管理 PodGroup / NodeGpuTopology 生命周期与状态机，leader election HA。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topogang-controller
+  namespace: topogang-system
+  labels:
+    app: topogang-controller
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: topogang-controller
+  template:
+    metadata:
+      labels:
+        app: topogang-controller
+    spec:
+      serviceAccountName: topogang-controller
+      containers:
+        - name: topogang-controller
+          image: topogang-controller:latest   # 构建自 cmd/controller
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/topogang-controller
+            - --leader-elect=true
+            - --schedule-timeout=600s
+            - --failure-window=60s
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10

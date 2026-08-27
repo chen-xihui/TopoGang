@@ -1,0 +1,35 @@
+# TopoGang 部署命名空间。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: topogang-system
+  labels:
+    topogang.io/managed: "true"
+---
+# topogang-scheduler ServiceAccount。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: topogang-scheduler
+  namespace: topogang-system
+---
+# topogang-controller ServiceAccount。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: topogang-controller
+  namespace: topogang-system
+---
+# topo-agent ServiceAccount。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: topogang-agent
+  namespace: topogang-system
+---
+# topo-gang-webhook ServiceAccount。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: topogang-webhook
+  namespace: topogang-system

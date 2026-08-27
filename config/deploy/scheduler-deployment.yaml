@@ -1,0 +1,87 @@
+# topogang-scheduler Deployment（§5.2 / §11.1）。
+#
+# 独立 kube-scheduler 二进制的插件扩展，schedulerName=topogang-scheduler，
+# 与默认调度器共存。leader election 保证多副本 HA。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topogang-scheduler
+  namespace: topogang-system
+  labels:
+    app: topogang-scheduler
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: topogang-scheduler
+  template:
+    metadata:
+      labels:
+        app: topogang-scheduler
+    spec:
+      serviceAccountName: topogang-scheduler
+      hostNetwork: false
+      containers:
+        - name: topogang-scheduler
+          image: topogang-scheduler:latest   # 构建自 cmd/scheduler（链接 Gang 插件 registry）
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/topogang-scheduler
+            - --config=/etc/topogang/scheduler-config.yaml
+            - --leader-elect=true
+            - --v=4
+          volumeMounts:
+            - name: scheduler-config
+              mountPath: /etc/topogang
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 10259
+              scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 10259
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: scheduler-config
+          configMap:
+            name: topogang-scheduler-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: topogang-scheduler-config
+  namespace: topogang-system
+data:
+  scheduler-config.yaml: |
+    apiVersion: kubescheduler.config.k8s.io/v1
+    kind: KubeSchedulerConfiguration
+    leaderElection:
+      leaderElect: true
+      resourceNamespace: topogang-system
+      resourceName: topogang-scheduler
+    profiles:
+      - schedulerName: topogang-scheduler
+        plugins:
+          queueSort:
+            enabled: [{ name: GangQueueSort }]
+            disabled: [{ name: PrioritySort }]
+          preFilter:
+            enabled: [{ name: GangPreFilter }, { name: TopoPreFilter }]
+          filter:
+            enabled: [{ name: TopoFilter }]
+          postFilter:
+            enabled: [{ name: GangPostFilter }]
+          score:
+            enabled: [{ name: TopoScore, weight: 5 }]
+          reserve:
+            enabled: [{ name: GpuReserve }]
+          permit:
+            enabled: [{ name: GangPermit }]
+          bind:
+            enabled: [{ name: DefaultBinder }]

@@ -1,0 +1,165 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: nodegputopologies.topology.topogang.io
+spec:
+  group: topology.topogang.io
+  names:
+    kind: NodeGpuTopology
+    listKind: NodeGpuTopologyList
+    plural: nodegputopologies
+    singular: nodegputopology
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: NodeGpuTopology 描述单个 GPU 节点的物理拓扑（§6.2）。
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: NodeGpuTopologySpec 定义节点 GPU 拓扑的期望数据（§6.2）。
+            properties:
+              domains:
+                description: domains NVLink 域权威聚合视图（§6.2 / §8.1）。
+                items:
+                  description: Domain 描述一个 NVLink 域（§6.2，权威聚合视图，s6 修订）。
+                  properties:
+                    gpuIndexes:
+                      description: gpuIndexes 域内 GPU 索引集合。
+                      items:
+                        format: int32
+                        type: integer
+                      type: array
+                    id:
+                      description: id 域 ID。
+                      type: string
+                    intraBandwidth:
+                      description: intraBandwidth 域内链路带宽（GB/s）。
+                      type: number
+                  required:
+                  - gpuIndexes
+                  - id
+                  type: object
+                type: array
+              generation:
+                description: generation 递增版本，供调度器判断缓存是否过期（§7.3.1 预检缓存 key）。
+                format: int64
+                type: integer
+              gpus:
+                description: gpus GPU 列表。
+                items:
+                  description: Gpu 描述节点上一张 GPU（§6.2）。
+                  properties:
+                    allocatedTo:
+                      description: allocatedTo 由 topo-agent 观测 Pod annotation 回填，仅对账用。
+                      properties:
+                        namespace:
+                          description: namespace 占用 Pod 命名空间。
+                          type: string
+                        podName:
+                          description: podName 占用 Pod 名称。
+                          type: string
+                        podUID:
+                          description: podUID 占用 Pod 的 UID。
+                          type: string
+                      type: object
+                    id:
+                      description: id 物理 GPU UUID / PCI 地址。
+                      type: string
+                    index:
+                      description: index 节点内 GPU 索引。
+                      format: int32
+                      type: integer
+                    model:
+                      description: model GPU 型号。
+                      type: string
+                    numaNode:
+                      description: numaNode 预留：NUMA 节点（v2 纳入打分）。
+                      format: int32
+                      type: integer
+                    nvlinkDomain:
+                      description: nvlinkDomain 所属 NVLink 域 ID（与 spec.domains 交叉校验，s6
+                        修订）。
+                      type: string
+                    peers:
+                      description: peers 与该 GPU 互联的对端（只列有链路/对端）。
+                      items:
+                        description: GpuPeer 表示某 GPU 与对端 GPU 的一条链路。
+                        properties:
+                          gpuId:
+                            description: gpuId 对端 GPU ID。
+                            type: string
+                          linkSpeed:
+                            description: linkSpeed 链路带宽（GB/s，双向）。
+                            type: number
+                          linkType:
+                            description: linkType 链路类型。
+                            type: string
+                        required:
+                        - gpuId
+                        - linkType
+                        type: object
+                      type: array
+                  required:
+                  - id
+                  - index
+                  type: object
+                type: array
+              nodeName:
+                description: nodeName 所属节点名。
+                type: string
+              source:
+                description: source 数据来源。
+                type: string
+            required:
+            - domains
+            - generation
+            - gpus
+            - nodeName
+            type: object
+          status:
+            description: NodeGpuTopologyStatus 定义节点拓扑的健康与观测状态（§7.1 T2 修订）。
+            properties:
+              error:
+                description: error 最近一次采集错误信息。
+                type: string
+              healthy:
+                description: |-
+                  healthy 节点拓扑是否健康。false 时分两级处置：
+                    心跳过期 -> 完全停止新分配（Filter 不返回该节点）；
+                    心跳正常但数据缺失 -> 仅按数量过滤、不选卡（§7.1 / §9.3）。
+                type: boolean
+              lastHeartbeat:
+                description: lastHeartbeat 最近一次采集心跳。
+                format: date-time
+                type: string
+              observedGeneration:
+                description: observedGeneration 已观测的 spec 版本。
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

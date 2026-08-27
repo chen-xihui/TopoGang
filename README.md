@@ -16,24 +16,32 @@
 | 阶段 | 状态 |
 |------|------|
 | **M1 地基**：CRD + topo-agent + 域划分/选团算法 | ✅ 已完成（核心逻辑 + 单测） |
-| **M2 Gang 调度**：PodGroup Controller + Gang 插件 + 双调度器 | 🚧 **进行中（核心语义已完成，真实适配待续）** |
+| **M2 Gang 调度**：PodGroup Controller + Gang 插件 + 双调度器 | ✅ **核心已完成**（Gang 语义 + Controller + 部署清单；真实 kube-scheduler framework 注册需集群环境） |
 | M3 拓扑感知：Topo 插件 + AllocationTracker + device plugin | 未开始 |
 | M4 打磨：抢占 / 性能基准 / 指标 / demo | 未开始 |
 
 ## 当前代码结构
 
 ```
-apis/scheduling/v1alpha1/       # PodGroup API 类型（§6.1）
-apis/topology/v1alpha1/         # NodeGpuTopology API 类型（§6.2）
+apis/scheduling/v1alpha1/       # PodGroup API 类型（§6.1）+ DeepCopy + scheme
+apis/topology/v1alpha1/         # NodeGpuTopology API 类型（§6.2）+ DeepCopy + scheme
+apis/scheme.go                  # 自定义 API 组 scheme 聚合
+config/crd/                     # controller-gen 生成的 CRD YAML（§6）
+config/rbac/                    # controller / scheduler / agent RBAC（含 pods/update，t1）
+config/scheduler/               # scheduler-config.yaml（§7.3 独立 profile）
+config/deploy/                  # 双调度器部署清单（scheduler/controller/agent/webhook，§11.1）
 pkg/topo/                       # 拓扑图模型、NVLink 域划分（Bron–Kerbosch）、选团、best-fit 决策（§8.1）
 pkg/agent/                      # topo-agent：Source 接口 + nvidia-smi/mock 实现 + CRD Writer（§7.1）
 pkg/gang/                       # Gang 核心语义：Permit All-or-Nothing / 组状态 / GangPrecheck / 预检缓存（§7.3.1）
 pkg/controller/state/           # PodGroup 状态机（§9.1：phase 迁移 / 超时 / released-generation 闭环 / 失败终态）
-pkg/plugins/gang/               # Gang 插件编排（QueueSort / PreFilter / Permit / Reserve / Unreserve）
+pkg/controllers/                # PodGroup Controller Reconcile（controller-runtime，§7.2：finalizer/孤儿解绑/闭环）
+pkg/plugins/gang/               # Gang 插件编排（QueueSort/PreFilter/Filter/PreBind/Permit/Reserve/Unreserve/PostFilter）
 cmd/agent/                      # topo-agent 入口
+cmd/controller/                 # topogang-controller 入口（leader election）
+cmd/scheduler/                  # topogang-scheduler 入口（配置校验 + 插件注册点）
 ```
 
-M2 的 Gang 核心语义以**可独立单测的纯逻辑包**落地（`pkg/gang` / `pkg/controller/state` / `pkg/plugins/gang`），不依赖集群即可验证评审关键正确性项（R1 off-by-one、N1 batch 计数、S4 回退清零、T4 phase 防御、T5 孤儿 Pod、S3 失败组拒绝、N3 快速失败）。
+M2 的 Gang 核心语义以**可独立单测的纯逻辑包**落地（`pkg/gang` / `pkg/controller/state` / `pkg/plugins/gang`），不依赖集群即可验证评审关键正确性项（R1 off-by-one、N1 batch 计数、S4 回退清零、T4 phase 防御、T5 孤儿 Pod、S3 失败组拒绝、N3 快速失败）；PodGroup Controller 已对接 CRD 与 released-generation 闭环（fake client 单测验证）；双调度器部署清单已就绪（真实 kube-scheduler framework 注册需集群环境链接 `k8s.io/kubernetes`）。
 
 ## 快速开始
 
@@ -80,9 +88,9 @@ go run ./cmd/agent --node-name=node-a --source=nvidia-smi
 - **选团策略**：硬约束（容量 / locked）与软打分（`domainScore = β·兄弟亲和 + α·容量富余 − γ·跨域惩罚`）分离。
 - **best-fit 决策**：`pkg/topo.BestFitDomain` 是 **Score 与 SelectGPUs 共享**的最优域选择函数（§8.1 M2/R4），保证"打分评估的域 = 实际落地的域"。
 
-## 下一步（M2 续 / M3）
+## 下一步（M3）
 
-M2 核心语义（Permit / GangPrecheck / 状态机）已完成；剩余为落地项：① controller-runtime 的 PodGroup Controller 对接 CRD 与 released-generation annotation 闭环；② scheduler-plugins 插件适配层与双调度器部署。随后进入 M3（Topo 插件 + AllocationTracker + device plugin）。
+M2 已基本完成：Gang 核心语义（Permit / GangPrecheck / 状态机）+ PodGroup Controller（released-generation 闭环）+ 双调度器部署清单。集群环境待补：① 真实 kube-scheduler framework 插件注册（链接 `k8s.io/kubernetes`）；② envtest 组件测试。下一里程碑 **M3**：Topo 插件（Filter/Score）+ AllocationTracker + best-fit 决策落地 + topo-gpu-plugin + 对账（§13）。
 
 ---
 

@@ -1,0 +1,64 @@
+# topo-gang-webhook（§11.1 T1：管理域默认要求）。
+#
+# 强制 GPU Pod 指定 schedulerName=topogang-scheduler（拒绝非 topogang 调度的 GPU Pod
+# 进入管理域节点），并校验 group-name/gpu-uuids 一致性，防止恶意 Pod 伪造分配声明。
+# 未部署本 webhook 即视为不满足管理域条件（§11.1），GPU 级记账/locked 链路不保证成立。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topo-gang-webhook
+  namespace: topogang-system
+  labels:
+    app: topo-gang-webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: topo-gang-webhook
+  template:
+    metadata:
+      labels:
+        app: topo-gang-webhook
+    spec:
+      serviceAccountName: topogang-webhook
+      containers:
+        - name: webhook
+          image: topo-gang-webhook:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9443
+              name: webhook
+          volumeMounts:
+            - name: cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+      volumes:
+        - name: cert
+          secret:
+            secretName: topo-gang-webhook-cert
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: topo-gang-webhook
+webhooks:
+  - name: gpu-pod.topogang.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    clientConfig:
+      service:
+        name: topo-gang-webhook
+        namespace: topogang-system
+        path: /validate-gpu-pod
+      caBundle: Cg==
+    rules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values: ["kube-system", "kube-node-lease", "kube-public"]

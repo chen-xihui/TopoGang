@@ -14,8 +14,10 @@
 package gang
 
 import (
+	"strings"
 	"time"
 
+	schedulingv1alpha1 "github.com/chenxihui/TopoGang/apis/scheduling/v1alpha1"
 	"github.com/chenxihui/TopoGang/pkg/controller/state"
 	core "github.com/chenxihui/TopoGang/pkg/gang"
 )
@@ -214,4 +216,56 @@ func StateMachineView(gs *core.GroupState) state.GroupView {
 		MinMember:         gs.Spec.MinMember,
 		ScheduledByGroup:  gs.ScheduledByGroup,
 	}
+}
+
+// ---------- 其余扩展点编排（可单测） ----------
+
+// Filter 返回 nil：组级判断由 GangPrecheck 与 Permit 收敛（§7.3.1 表格）。
+// FilterResult.Allow 表示节点可继续；本插件在 Filter 阶段不做组级拦截。
+func (p *Plugin) Filter(pi PodInfo) FilterResult {
+	return FilterResult{Allow: true}
+}
+
+// FilterResult 是 Filter 的返回。
+type FilterResult struct {
+	Allow bool
+}
+
+// PreBind 把分配的 GPU 列表写入 Pod annotation（§7.3.1 s1 修订：由 Reserve 移至 PreBind，
+// 避免未放行即持久化修改 Pod 元数据）。返回新 annotation 值供适配层写回。
+func (p *Plugin) PreBind(gs *core.GroupState, podID string, gpuUUIDs []string) map[string]string {
+	if len(gpuUUIDs) == 0 {
+		return nil
+	}
+	return map[string]string{
+		schedulingv1alpha1.GPUUUIDsAnnotation: joinUUIDs(gpuUUIDs),
+	}
+}
+
+// PreemptCandidate 描述组级抢占候选（§8.5）。
+type PreemptCandidate struct {
+	// GroupName 被抢占的低优组。
+	GroupName string
+	// Namespace 被抢占组命名空间。
+	Namespace string
+	// MemberPodIDs 被抢占组成员 Pod 列表。
+	MemberPodIDs []string
+}
+
+// PostFilter 实现组级抢占决策（§8.5，默认关闭）。返回是否可抢占及候选。
+func (p *Plugin) PostFilter(pi PodInfo, lowerPriorityGroups []PreemptCandidate) (bool, []PreemptCandidate) {
+	if !p.PreemptionEnabled {
+		return false, nil
+	}
+	// 组级抢占：只允许整组抢占（§8.5 规则 2）
+	for _, cand := range lowerPriorityGroups {
+		if len(cand.MemberPodIDs) >= 1 {
+			return true, []PreemptCandidate{cand}
+		}
+	}
+	return false, nil
+}
+
+func joinUUIDs(ids []string) string {
+	return strings.Join(ids, ",")
 }

@@ -1,0 +1,57 @@
+# TopoGang 独立调度器 Profile（§7.3 / §5.2）。
+#
+# 以独立 schedulerName 与默认调度器共存，可灰度、可回退（§4.2）。
+# 部署时通过 --config 传入本文件。
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+leaderElection:
+  leaderElect: true
+  resourceNamespace: topogang-system
+  resourceName: topogang-scheduler
+profiles:
+  - schedulerName: topogang-scheduler
+    plugins:
+      queueSort:
+        enabled:
+          - name: GangQueueSort
+        disabled:
+          - name: PrioritySort
+      preFilter:
+        enabled:
+          - name: GangPreFilter
+          - name: TopoPreFilter
+      filter:
+        enabled:
+          - name: TopoFilter
+      postFilter:
+        enabled:
+          - name: GangPostFilter
+      score:
+        enabled:
+          - name: TopoScore
+            weight: 5
+      reserve:
+        enabled:
+          - name: GpuReserve
+      permit:
+        enabled:
+          - name: GangPermit
+      bind:
+        enabled:
+          - name: DefaultBinder
+  # 拓扑/组状态缓存刷新参数（供插件读取）
+  pluginConfig:
+    - name: GangPermit
+      args:
+        scheduleTimeoutSeconds: 600
+        maxSchedulingBatch: 4
+    - name: GangPreFilter
+      args:
+        backoffBaseSeconds: 30
+    - name: TopoFilter
+      args:
+        gpuDomain: nvlink
+        # 拓扑不健康处置（§7.1 T2）：
+        #   heartbeat-stale: 完全停止分配（Filter 不返回该节点）
+        #   data-missing: 数量过滤、不选卡
+        unhealthyPolicy: heartbeat-stale

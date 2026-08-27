@@ -1,0 +1,15 @@
+# TopoGang 双调度器部署清单聚合（§11.1）。
+#
+# 用法：kubectl apply -k config/deploy
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespace.yaml
+- ../crd
+- scheduler-deployment.yaml
+- controller-deployment.yaml
+- agent-daemonset.yaml
+- webhook.yaml
+- ../rbac/role.yaml
+- ../rbac/scheduler-rbac.yaml
+- ../rbac/agent-rbac.yaml

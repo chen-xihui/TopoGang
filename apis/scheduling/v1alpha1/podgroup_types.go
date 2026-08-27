@@ -137,6 +137,9 @@ type PodGroupStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
@@ -149,6 +152,7 @@ type PodGroup struct {
 	Status PodGroupStatus `json:"status,omitempty"`
 }
 
+// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PodGroupList 是 PodGroup 的列表。

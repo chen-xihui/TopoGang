@@ -130,6 +130,9 @@ type NodeGpuTopologyStatus struct {
 	Error string `json:"error,omitempty"`
 }
 
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 // +genclient
 // +genclient:nonNamespaced
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -143,6 +146,7 @@ type NodeGpuTopology struct {
 	Status NodeGpuTopologyStatus `json:"status,omitempty"`
 }
 
+// +kubebuilder:object:root=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NodeGpuTopologyList 是 NodeGpuTopology 的列表。

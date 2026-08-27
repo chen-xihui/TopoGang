@@ -1,0 +1,43 @@
+# topogang-scheduler RBAC（§11.1 t1：含 podgroups/update 写 released-generation + pods/update 写 gpu-uuids）。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topogang-scheduler-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods/update"]
+  verbs: ["update"]   # PreBind 写 gpu-uuids annotation（s1/t1）
+- apiGroups: ["scheduling.topogang.io"]
+  resources: ["podgroups"]
+  verbs: ["get", "list", "watch", "update", "patch"]   # 写 released-generation annotation（M5）
+- apiGroups: ["scheduling.topogang.io"]
+  resources: ["podgroups/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["topology.topogang.io"]
+  resources: ["nodegputopologies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["bindings", "events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topogang-scheduler-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: topogang-scheduler-role
+subjects:
+- kind: ServiceAccount
+  name: topogang-scheduler
+  namespace: topogang-system

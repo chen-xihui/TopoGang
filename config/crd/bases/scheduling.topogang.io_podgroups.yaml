@@ -1,0 +1,138 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: podgroups.scheduling.topogang.io
+spec:
+  group: scheduling.topogang.io
+  names:
+    kind: PodGroup
+    listKind: PodGroupList
+    plural: podgroups
+    singular: podgroup
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PodGroup 是一组需要原子调度的 Pod 的声明（§6.1）。
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PodGroupSpec 定义 PodGroup 的期望状态（§6.1）。
+            properties:
+              maxSchedulingBatch:
+                description: |-
+                  maxSchedulingBatch 组内同时进入"调度 cycle 进行中（PreFilter~Permit 提交）"
+                  的最大成员数；Permit 返回 Wait 后不计入名额（§8.4，N1）。默认 4。
+                format: int32
+                type: integer
+              minMember:
+                description: |-
+                  minMember 组内最少成功调度成员数，调度器保证"minMember 全部满足才放行"。
+                  该值必须为 0 以上；为 0 表示非严格 Gang（预留）。
+                format: int32
+                type: integer
+              priorityClassName:
+                description: priorityClassName 用于跨组抢占排序的优先级类。
+                type: string
+              queue:
+                description: queue 队列名（预留多队列策略，本期为 FIFO）。
+                type: string
+              scheduleTimeoutSeconds:
+                description: |-
+                  scheduleTimeoutSeconds 从组开始排队到整组调度的最大等待时间（秒），
+                  超时整组回退重排。默认 600。
+                format: int32
+                type: integer
+              topologyPolicy:
+                description: topologyPolicy 可选的拓扑需求声明（§6.1）。
+                properties:
+                  gpuDomain:
+                    description: gpuDomain 声明域策略：none | nvlink | pcie（本期实现 nvlink）。
+                    type: string
+                type: object
+            required:
+            - minMember
+            type: object
+          status:
+            description: PodGroupStatus 定义 PodGroup 的观测状态（§6.1）。
+            properties:
+              conditions:
+                description: conditions 状态条件。
+                items:
+                  description: PodGroupCondition 描述 PodGroup 的一个状态条件。
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      description: PodGroupConditionType 表示 PodGroup 的条件类型。
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              failed:
+                description: failed 失败成员数。
+                format: int32
+                type: integer
+              lastScheduleTime:
+                description: lastScheduleTime 最近一次整组放行时间（供观察窗口判定，§9.1）。
+                format: date-time
+                type: string
+              observedGeneration:
+                description: observedGeneration 已观测的 spec 版本。
+                format: int64
+                type: integer
+              phase:
+                description: phase 当前阶段。
+                type: string
+              running:
+                description: running 运行中成员数。
+                format: int32
+                type: integer
+              scheduled:
+                description: scheduled 已调度成员数。
+                format: int32
+                type: integer
+              scheduledByGroup:
+                description: scheduledByGroup 已通过 Permit 原子放行的成员数（§9.1 released-generation
+                  闭环）。
+                format: int32
+                type: integer
+              succeeded:
+                description: succeeded 成功成员数。
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

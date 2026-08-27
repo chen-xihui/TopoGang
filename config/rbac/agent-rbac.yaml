@@ -1,0 +1,31 @@
+# topo-agent RBAC：写 NodeGpuTopology 并监听 Pod annotation 回填 allocatedTo（§7.1）。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topogang-agent-role
+rules:
+- apiGroups: ["topology.topogang.io"]
+  resources: ["nodegputopologies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["topology.topogang.io"]
+  resources: ["nodegputopologies/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topogang-agent-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: topogang-agent-role
+subjects:
+- kind: ServiceAccount
+  name: topogang-agent
+  namespace: topogang-system

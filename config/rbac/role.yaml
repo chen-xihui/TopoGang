@@ -1,0 +1,37 @@
+# TopoGang Controller RBAC（§11.1 t1 修订：含 podgroups/update + pods/update）。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: topogang-controller-role
+rules:
+- apiGroups: ["scheduling.topogang.io"]
+  resources: ["podgroups"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["scheduling.topogang.io"]
+  resources: ["podgroups/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["topology.topogang.io"]
+  resources: ["nodegputopologies"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods/update"]
+  verbs: ["update"]   # 孤儿解绑 group-name annotation（s4/t1）
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: topogang-controller-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: topogang-controller-role
+subjects:
+- kind: ServiceAccount
+  name: topogang-controller
+  namespace: topogang-system
